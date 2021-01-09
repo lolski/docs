@@ -127,25 +127,25 @@ import grakn.client.answer.ConceptMap;
 
 import java.util.List;
 
-public class SocialNetworkQuickstartQuery extends Throwable {
+public class SocialNetworkQuickstartQuery {
     public static void main(String[] args) {
-        GraknClient client = new GraknClient("localhost:48555");
-        GraknClient.Session session = client.session("social_network");
+        Grakn.Client client = new GraknClient("localhost:1729");
+        Grakn.Session session = client.session("social_network", Grakn.Session.Type.DATA);
         GraknClient.Transaction transaction = session.transaction().write();
 
-        GraqlGet query = match(
+        GraqlMatch query = match(
                 var().rel("employer", var("org")).rel("employee", var("per")).isa("employment"),
                 var("per").has("full-name", var("per-fn")),
                 var("org").has("name", var("org-n"))
-        ).get();
+        );
 
-        List<ConceptMap> answers = transaction.execute(query).get();
+        Stream<ConceptMap> answers = transaction.query().match(query);
 
-        for (ConceptMap answer : answers) {
-            System.out.println(answer.get("per-fn").asAttribute().value());
-            System.out.println(answer.get("org-n").asAttribute().value());
+        answers.forEach(answer -> {
+            System.out.println(answer.get("per-fn").asAttribute().getValue());
+            System.out.println(answer.get("org-n").asAttribute().getValue());
             System.out.println(" - - - - - - - - ");
-        }
+        });
 
         transaction.close();
         session.close();
@@ -157,11 +157,11 @@ public class SocialNetworkQuickstartQuery extends Throwable {
 
 <!-- test-example social_network_quickstart_query.py -->
 ```python
-from grakn.client import GraknClient
+from grakn.client import *
 
-with GraknClient(uri="localhost:48555") as client:
-    with client.session(keyspace = "social_network") as session:
-      with session.transaction().read() as transaction:
+with GraknClient("localhost:1729") as client:
+    with client.session("social_network", SessionType.DATA) as session:
+      with session.transaction(TransactionType.READ) as transaction:
         query = '''
           match
             $pos isa media;
@@ -171,31 +171,33 @@ with GraknClient(uri="localhost:48555") as client:
             (reacted-emotion: $fun, reacted-to: $pos, reacted-by: $per) isa reaction;
           get $pos;
         '''
-        answer_iterator = transaction.query(query).get()
+        answer_iterator = transaction.query().match(query)
         for answer in answer_iterator:
-          print(answer.map().get("pos").id)
+          print(answer.get("pos").get_iid())
 ```
 
 #### Retrieve the average salary of all employees at Pharos using [Client Node.js](../03-client-api/03-nodejs.md)
 
 <!-- test-example socialNetworkQuickstartQuery.js -->
 ```javascript
-const GraknClient = require("grakn-client");
+const GraknClient = require("grakn-client/rpc/GraknClient");
+const Grakn = require("grakn-client/Grakn");
+const { SessionType, TransactionType } = Grakn;
 
 async function getAverageSalaryAt (orgName) {
-    const client = new GraknClient("localhost:48555");
-	const session = await client.session("social_network");
-	const transaction = await session.transaction().read()
+    const client = new GraknClient("localhost:1729");
+	const session = await client.session("social_network", SessionType.DATA);
+	const transaction = await session.transaction(TransactionType.READ)
 	const query = `
 		match
 			$org isa organisation, has name "${orgName}";
 			($org, $per) isa employment, has salary $sal;
 		get $sal; mean $sal;
 	`
-	const answerIterator = await transaction.query(query);
+	const answerIterator = await transaction.query().matchAggregate(query);
 	const answer = await answerIterator.next();
 	if (answer) {
-		console.log(await answer.number());
+		console.log(await answer.asNumber());
 	} else {
 	  console.log(`No one works at ${orgName}`);
 	}
